@@ -38,7 +38,7 @@ Un assistant IA personnel pour la gestion intelligente de tâches, avec interfac
 
 ```bash
 # Cloner le dépôt
-git clone https://github.com/votre-nom/mon-agent-todo.git
+git clone git clone https://github.com/yaell-rivart/mon-agent-todo.git
 cd nom-du-repo
 
 # Installer les dépendances
