@@ -38,7 +38,7 @@ Un assistant IA personnel pour la gestion intelligente de tâches, avec interfac
 
 ```bash
 # Cloner le dépôt
-git clone https://github.com/ton-username/nom-du-repo.git
+git clone https://github.com/votre-nom/mon-agent-todo.git
 cd nom-du-repo
 
 # Installer les dépendances
@@ -66,3 +66,4 @@ npm run start --prefix ./frontend
 
 - [Node.js](https://nodejs.org/) >= v22.16.0
 - [Ollama](https://ollama.com) >= 0.1.34
+- [Python](https://www.python.org/downloads/) >= 3.12.6
