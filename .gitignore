@@ -1,0 +1,19 @@
+# Ignorer les fichiers sensibles
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node.js
+node_modules/
+
+# Bases de données locales
+*.sqlite
+*.db
+
+# Autres
+.DS_Store
+Thumbs.db
