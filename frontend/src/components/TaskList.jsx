@@ -1,8 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import useLocalStorage from '../hook/useLocalStorage';
 
-// Helpers
-function parseDateUTC(dateStr) {
+function parseDateUTC(dateStr) {//Permet d'avoir des dates dans les fuseaux horaires avec les données recus
   let isoDate = dateStr.replace(' ', 'T');
   if (!isoDate.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(isoDate)) {
     isoDate += 'Z';
@@ -10,15 +8,15 @@ function parseDateUTC(dateStr) {
   return new Date(isoDate);
 }
 
-function formatDateFr(dateStr) {
+function formatDateFr(dateStr) {//permet d'avoir un format de date, là c'est belge avec date.toLocaleDateString
   const date = parseDateUTC(dateStr);
   const options = {weekday: 'long',year: 'numeric',month: 'long',day: 'numeric',
     hour: '2-digit',minute: '2-digit',hour12: false,timeZoneName: 'short'
   };
-  return date.toLocaleDateString('fr-FR', options);
+  return date.toLocaleDateString('fr-BE', options);
 }
 
-function isOverdue(dueDateStr) {
+function isOverdue(dueDateStr) {//Vérifie si une tâche est en retard par un boleen
   const now = new Date();
   const dueDate = parseDateUTC(dueDateStr);
   return now > dueDate;
@@ -26,35 +24,48 @@ function isOverdue(dueDateStr) {
 
 // Composant principal
 const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
-  const [handledIds, setHandledIds] = useLocalStorage("handledTasks", []);
-  const lastHandledRef = useRef(new Set());
-  const initializedRef = useRef(false);
-
+  const handledIds = useRef(new Set());//Set temporaire de tâches traitées très récemment (dans les 60 sec).
+  const lastHandledRef = useRef(new Set());//Set temporaire de tâches traitées très récemment (dans les 60 sec).
+  
+  // j'en fairais un hook pour tasklist avec ces trois fonct plus tard
+  const deleteTask = (taskId) => {
+    onDeleteTask(taskId);
+  };
+  
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (!initializedRef.current) {
-        initializedRef.current = true;
-        return;
-      }
-
-      taches.forEach(task => {
+  const intervalId = setInterval(async () => {
+    const processTasks = async () => {
+      for (const task of taches) {
         const due = task.next_due_date || task.period_end;
-        if (!due) return;
+        if (!due) continue;
 
         const isPeriodic = Boolean(task.periodicity);
         const overdue = isOverdue(due);
 
-        if (isPeriodic && task.isDone && overdue && !handledIds.includes(task.id)) {
-          onToggleDone(task.id);
-          setHandledIds(prev => [...prev, task.id]);
-          lastHandledRef.current.add(task.id);
-          setTimeout(() => lastHandledRef.current.delete(task.id), 60 * 1000);
-        }
-      });
-    }, 60000);
+        
+        if (isPeriodic && task.isDone && overdue && !handledIds.current.has(task.id)) {
+          try {
+            await onToggleDone(task.id); // 🔥 Ici on attend que l'API fasse la maj
+            // ✅ On ajoute à notre Set de tâches déjà traitées
+            handledIds.current.add(task.id);
+            lastHandledRef.current.add(task.id);
+            // setHandledIds(prev => [...prev, task.id]);
+            // lastHandledRef.current.add(task.id);
 
-    return () => clearInterval(intervalId);
-  }, [taches, onToggleDone, handledIds, setHandledIds]);
+            setTimeout(() => {
+              lastHandledRef.current.delete(task.id);
+              handledIds.current.delete(task.id); // (optionnel mais utile si tu veux les retraiter plus tard)
+            }, 60 * 1000);
+          } catch (err) {
+            console.error("Erreur lors du toggle automatique :", err);
+          }
+        }
+      }
+    }; processTasks(); // Lance le traitement asynchrone
+  }, 60000);
+  return () => clearInterval(intervalId);
+
+  }, [taches, onToggleDone]);
 
   const renderTaskInfo = (task) => {
     const dueDateStr = task.next_due_date || task.period_end;
@@ -67,30 +78,29 @@ const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
       ? `Temps restant : ${task.temps_restant.replace(/^Temps restant\s*:\s*/i, '').trim().replace(/^\d+\s*s(ec)?$/i, 'moins de 1 minute')}`
       : null;
     const dateLimite = `Date limite : ${formatDateFr(dueDateStr)}`;
-
-    if (isPeriodic && !task.isDone && lastHandledRef.current.has(task.id)) {
-      return (
-        <div style={styles.infoBox}>
-          <div>Tâche accomplie (suivante)</div>
-          {tempsRestant && <div>{tempsRestant}</div>}
-          <div>{dateLimite}</div>
-        </div>
-      );
-    }
+    //pour plus tard
+    // if (isPeriodic && !task.isDone && lastHandledRef.current.has(task.id)) {
+    //   return (
+    //     <div style={styles.infoBox}>
+    //       <div>Tâche accomplie (suivante)</div>
+    //       {tempsRestant && <div>{tempsRestant}</div>}
+    //       <div>{dateLimite}</div>
+    //     </div>
+    //   );
+    // }
 
     if (task.isDone) return null;
 
     if (isPeriodic) {
-      if (overdue && missedCount > 0) {
-        return (
-          <div style={styles.infoBox}>
-            <div>Attention, tâche ratée {missedCount} fois</div>
-            {tempsRestant && <div>{tempsRestant}</div>}
-            <div>{dateLimite}</div>
-          </div>
-        );
-      }
-
+      // if (overdue && missedCount > 0) {//pour plus tard
+      //   return (
+      //     <div style={styles.infoBox}>
+      //       <div>Attention, tâche ratée {missedCount} fois</div>
+      //       {tempsRestant && <div>{tempsRestant}</div>}
+      //       <div>{dateLimite}</div>
+      //     </div>
+      //   );
+      // }
       if (!overdue) {
         return (
           <div style={styles.infoBox}>
@@ -115,9 +125,6 @@ const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
     return null;
   };
 
-  const deleteTask = (taskId) => {
-    onDeleteTask(taskId);
-  };
 
   return (
     <div>
@@ -171,65 +178,3 @@ const styles = {
 };
 
 export default TaskList;
-
-
-// import React, { useEffect, useRef, useState } from 'react';
-// import useLocalStorage from '../hook/useLocalStorage';
-
-// function isOverdue(dueDateStr) {
-//   return new Date() > new Date(dueDateStr);
-// }
-
-// const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
-//   const [handledIds, setHandledIds] = useLocalStorage('handledTasks', []);
-//   const initialized = useRef(false);
-  
-//   // state interne pour forcer un rerender
-//   const [, setTick] = useState(0);
-
-//   useEffect(() => {
-//     const intervalId = setInterval(() => {
-//       if (!initialized.current) {
-//         initialized.current = true;
-//         return;
-//       }
-
-//       taches.forEach(task => {
-//         const due = task.next_due_date || task.period_end;
-//         if (!due || !task.isDone || !task.periodicity) return;
-
-//         if (isOverdue(due) && !handledIds.includes(task.id)) {
-//           onToggleDone(task.id);
-//           setHandledIds(prev => [...prev, task.id]);
-//         }
-//       });
-
-//       // Forcer le rerender chaque minute
-//       setTick(t => t + 1);
-//     }, 60000);
-
-//     return () => clearInterval(intervalId);
-//   }, [taches, onToggleDone, handledIds, setHandledIds]);
-
-//   return (
-//     <div>
-//       <h3>{titre}</h3>
-//       <ul>
-//         {taches.map(t => (
-//           <li key={t.id}>
-//             <label>
-//               <input
-//                 type="checkbox"
-//                 checked={t.isDone}
-//                 onChange={() => onToggleDone(t.id)}
-//               />
-//               {t.description}
-//             </label>
-//           </li>
-//         ))}
-//       </ul>
-//     </div>
-//   );
-// };
-
-// export default TaskList;

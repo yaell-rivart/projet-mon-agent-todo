@@ -110,6 +110,7 @@ function AddTask({onTaskAdded}) {
       <DurationInput
         value={estimatedMinutes}
         onDurationChange={setEstimatedMinutes}
+        style={{ width: "80%", padding: 8 }}
       />
       <div style={{ marginTop: 10 }}>
         <label>

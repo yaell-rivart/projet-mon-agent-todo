@@ -42,7 +42,7 @@ function DurationInput({value = 0, onDurationChange }) {
   return (
     <div>
       <label>Durée estimée :</label>
-      <div style={{ display: "flex", gap: "10px", marginTop: 5 }}>
+      <div style={{ width: "100%", display: "flex", gap: "10px", marginTop: 5, flexWrap: "wrap" }}>
         <div>
           <label>minutes :</label><br />
           <input name="minutes" type="number" min="0" onChange={handleChange("minutes")}  value={duration.minutes} placeholder="Minutes" />

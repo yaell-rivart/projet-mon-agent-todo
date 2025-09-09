@@ -58,7 +58,7 @@ async def chat_endpoint(request: Request):
 @app.get("/tasks")
 def read_tasks():
     #met à jour les périodiques
-    refresh_tasks()#en partant du princique que le back est actif
+    refresh_tasks()#en partant du princique que le back est tout le temps actif
     now = datetime.now(timezone.utc)
     with SessionLocal() as db:
         tasks = db.query(Task).all()
