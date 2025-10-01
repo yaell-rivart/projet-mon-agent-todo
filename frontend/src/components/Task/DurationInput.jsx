@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
 function DurationInput({value = 0, onDurationChange }) {
-  const [duration, setDuration] = useState({
-    minutes: 0,
-    hours: 0,
-    days: 0,
-    weeks: 0,
-    months: 0,
+  const [duration, setDuration] = useState({ 
+    minutes: 0, hours: 0, days: 0, weeks: 0, months: 0,
   });
   
   // Si `value` est remis à 0 dans le parent, reset tous les champs
   useEffect(() => {
     if (value === 0) {
       setDuration({
-        minutes: 0,
-        hours: 0,
-        days: 0,
-        weeks: 0,
-        months: 0,
+        minutes: 0,hours: 0,days: 0,weeks: 0,months: 0,
       });
     }
   }, [value]);
@@ -28,7 +20,7 @@ function DurationInput({value = 0, onDurationChange }) {
       duration.hours * 60 +
       duration.days * 24 * 60 +
       duration.weeks * 7 * 24 * 60 +
-      duration.months * 30 * 24 * 60; // approximation
+      duration.months * 30 * 24 * 60;
     onDurationChange(totalMinutes);
   }, [duration, onDurationChange]);
 
@@ -41,7 +33,7 @@ function DurationInput({value = 0, onDurationChange }) {
 
   return (
     <div>
-      <label>Durée estimée :</label>
+      <label>Durée estimée d'action à faire par tâche :</label>
       <div style={{ width: "100%", display: "flex", gap: "10px", marginTop: 5, flexWrap: "wrap" }}>
         <div>
           <label>minutes :</label><br />

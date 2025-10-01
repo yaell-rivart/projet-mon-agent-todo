@@ -23,7 +23,7 @@ function isOverdue(dueDateStr) {//Vérifie si une tâche est en retard par un bo
 }
 
 // Composant principal
-const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
+const TaskList = ({ titre, taches, onToggleDone, onDeleteTask, disableToggle = false }) => {
   const handledIds = useRef(new Set());//Set temporaire de tâches traitées très récemment (dans les 60 sec).
   const lastHandledRef = useRef(new Set());//Set temporaire de tâches traitées très récemment (dans les 60 sec).
   
@@ -43,7 +43,7 @@ const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
         const overdue = isOverdue(due);
 
         
-        if (isPeriodic && task.isDone && overdue && !handledIds.current.has(task.id)) {
+        if (isPeriodic && task.isDone && overdue && !task.non_actif && !handledIds.current.has(task.id)) {
           try {
             await onToggleDone(task.id); // 🔥 Ici on attend que l'API fasse la maj
             // ✅ On ajoute à notre Set de tâches déjà traitées
@@ -68,12 +68,19 @@ const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
   }, [taches, onToggleDone]);
 
   const renderTaskInfo = (task) => {
+    if (task.non_actif && !task.isDone) {
+      return (
+        <div style={styles.infoBox}>
+          <span style={{ color: 'orangered' }}>⛔ Inactive maintenant (indisponibilité)</span>
+        </div>
+      );
+    }
     const dueDateStr = task.next_due_date || task.period_end;
     if (!dueDateStr) return null;
 
     const overdue = isOverdue(dueDateStr);
     const isPeriodic = Boolean(task.periodicity === true || task.periodicity === "true");
-    const missedCount = task.missed_count || 0;
+    // const missedCount = task.missed_count || 0;
     const tempsRestant = task.temps_restant
       ? `Temps restant : ${task.temps_restant.replace(/^Temps restant\s*:\s*/i, '').trim().replace(/^\d+\s*s(ec)?$/i, 'moins de 1 minute')}`
       : null;
@@ -138,7 +145,8 @@ const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
                 type="checkbox"
                 id={`task-checkbox-${t.id}`}
                 checked={t.isDone}
-                onChange={() => onToggleDone(t.id)}
+                disabled={t.non_actif}
+                onChange={() => {if (!disableToggle && !t.non_actif) onToggleDone(t.id);}}
               />
               <label
                 htmlFor={`task-checkbox-${t.id}`}
@@ -165,7 +173,6 @@ const TaskList = ({ titre, taches, onToggleDone, onDeleteTask }) => {
   );
 };
 
-// Styles
 const styles = {
   header: { textAlign: "right", marginRight: 10 },
   ul: { paddingLeft: 0, listStyleType: 'none' },

@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import TaskList from './components/TaskList';
-import AddTask from './components/AddTask';
+
+import TaskList from './components/Task/TaskList';
+import AddTask from './components/Task/AddTask';
+import IndisposList from './components/unavailability/IndisposList';
+import AddIndispo from './components/unavailability/AddIndispo';
+import MessagePanel from './components/MessagePanel';
 
 import useTasks from './hooks/useTasks';
-import useAutoRefresh from './hooks/useAutoRefresh'; // import du hook
+import useAutoRefresh from './hooks/useAutoRefresh'; 
 
 
 function App() {
@@ -12,14 +16,23 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("normal");//à voir plus tard
-  const [durations, setDurations] = useState({
-    jours: 0,
-    semaines: 0,
-    mois: 0
-  });
+  // const [durations, setDurations] = useState({
+  //   jours: 0,
+  //   semaines: 0,
+  //   mois: 0
+  // });
+  const [refreshIndispos, setRefreshIndispos] = useState(false);
 
-  //raffraichir la page
+
+  //raffraichir la page des taches
   useAutoRefresh(fetchTasks, 60000);
+  
+  const triggerRefreshIndispos = () => {
+    // change de valeur à chaque appel
+    // //Parce qu’on veut accéder à la valeur actuelle du state (prev)
+    // et // Appelle une fonction pour rafraîchir la liste
+    setRefreshIndispos(prev => !prev); 
+  };
 
   const envoyerMessage = async () => {
 
@@ -55,13 +68,23 @@ function App() {
     setInput("");
   };
 
+  // filtre tache
   const tasksToDo = taches.filter((task) => !task.isDone);
   const tasksDone = taches.filter((task) => task.isDone);
+  const tasksInactive = taches.filter((task) => !task.isDone && task.non_actif);
   console.log("Messages envoyés :", messages);
   return (
     <div style={{ padding: 20 }}>
       <h1>Agent IA - ToDo Chat</h1>
+
+      <MessagePanel/>
+
       <AddTask visible={true} onTaskAdded={fetchTasks}/>
+
+      <AddIndispo onIndispoAdded={triggerRefreshIndispos} />
+
+      <IndisposList refreshFlag={refreshIndispos} />
+
       <div style={{ display: "flex", gap: "40px", justifyContent: "center", flexWrap: "wrap"}}>
       <TaskList 
       titre="📋 Liste des tâches à faire" 
@@ -76,8 +99,24 @@ function App() {
       onToggleDone={toggleTaskStatus} 
       onDeleteTask={handleDeleteTask} 
       />
+      
+      <TaskList 
+        titre="🚫 Tâches non actives (en période d’indisponibilité)" 
+        taches={tasksInactive} 
+        onToggleDone={() => {}} // désactivé
+        onDeleteTask={handleDeleteTask}
+        disableToggle={true}
+      />
       </div>
     </div>
   );
 }
+const styles = {
+  appContainer: {
+    minWidth: 400,  
+    minHeight: 600, 
+    padding: 20,
+    boxSizing: 'border-box', 
+  },
+};
 export default App;

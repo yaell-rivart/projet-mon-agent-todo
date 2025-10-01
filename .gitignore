@@ -16,8 +16,9 @@ node_modules/
 
 # frontend fichier pour l'instant inutile
 frontend/src/components/DeleteTask
-frontend/src/components/MessageList
 frontend/src/components/ModeSelector
+frontend/src/hook/useTaskMeta
+frontend/src/components/Task/TaskPeriodicityInput
 
 # Autres
 .DS_Store

@@ -1,11 +1,12 @@
 import re
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import PromptTemplate
-from backend.database import (
+
+from .models import SessionLocal
+from .manage_db.manage_task import (
     ajouter_tache, supprimer_tache_par_id, lister_taches,
     get_task_by_description, get_task_by_id,
-    compter_absences_total, compter_absences_recente
-)
+    compter_absences_total, compter_absences_recente)
 memory = {}
 
 def create_agent():
@@ -14,25 +15,24 @@ def create_agent():
     prompt = PromptTemplate(
         input_variables=["input"],
         template="""
-Tu es un assistant de gestion de tâches. 
-Tu dois deviner si l'utilisateur souhaite :
+            Tu es un assistant de gestion de tâches. 
+            Tu dois deviner si l'utilisateur souhaite :
 
-- ajouter une tâche
-- supprimer une tâche
-- lister les tâches
+            - ajouter une tâche
+            - supprimer une tâche
+            - lister les tâches
 
-Réponds uniquement par "ajout", "supprime", "liste", ou "inconnu".
+            Réponds uniquement par "ajout", "supprime", "liste", ou "inconnu".
 
-Exemples :
-- "Ajoute acheter du pain" → ajout
-- "Supprime la tâche acheter du pain" → supprime
-- "Montre-moi mes tâches" → liste
+            Exemples :
+            - "Ajoute acheter du pain" → ajout
+            - "Supprime la tâche acheter du pain" → supprime
+            - "Montre-moi mes tâches" → liste
 
-Requête : {input}
-Réponse :
-"""
+            Requête : {input}
+            Réponse :
+            """
     )
-
     return prompt | llm
 
 def run_agent(agent, user_input: str) -> str:
@@ -84,9 +84,27 @@ def run_agent(agent, user_input: str) -> str:
         else:
             total = compter_absences_total()
             return f"Il y a eu {total} absences au total."
-        
+    
     elif "liste" in action:
         return lister_taches()
+    
+    elif "suggère" in user_input.lower() or "idée" in user_input.lower() or "suggestion" in user_input.lower():
+        with SessionLocal() as db:
+            tasks = db.query(Task).order_by(Task.priority.asc()).all()
+            suggestions = []
+
+            for task in tasks:
+                occs = task.occurrences
+                if len(occs) >= 3:
+                    missed = sum(not o.is_done for o in occs)
+                    if missed >= 2:
+                        suggestions.append(f"- {task.description} [priorité {task.priority}] ({missed} fois ratée)")
+
+            if suggestions:
+                return "Voici quelques tâches que tu sembles oublier :\n" + "\n".join(suggestions)
+            else:
+                return "Tu sembles bien gérer tes tâches, je n’ai rien à suggérer."
 
     else:
         return "Je n'ai pas compris. Tu peux essayer : 'ajoute', 'supprime', ou 'liste'."
+    

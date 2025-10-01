@@ -1,18 +1,17 @@
-from fastapi import FastAPI, Path, Body, Request,HTTPException  # ajout Request
+from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
-from .database import (
-    Task, SessionLocal,
-    ajouter_tache, marquer_tache_faite,compter_occurrences_ratees_par_tache,
-    supprimer_tache_par_id, supprimer_tache
-    )
+
+from .schematAPI import TempsDeplacementRequest
+from .models import Task, TempsDeDeplacement, SessionLocal
 from .agent import create_agent, run_agent  
-from .fonctionnalite import get_next_due_date, afficher_temps_restant,refresh_tasks,make_aware
+from .Request.Request_indispo import router as indispo_router
+from .Request.Request_task import router as task_router
+from .Request.Request_message import router as message_router
 
 app = FastAPI()
 agent = create_agent()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,26 +21,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class TaskCreateRequest(BaseModel):
-    description: str
-    estimated_minutes: int = Field(..., alias="estimatedMinutes", gt=0)
-    periodicity: bool
-    class Config:
-        allow_population_by_field_name = True
+app.include_router(indispo_router)
+app.include_router(task_router)
+app.include_router(message_router)
 
-@app.post("/tasks")
-def create_task(task: TaskCreateRequest):
-    # print(">> Données recues:",task.dict())
-    try:
-        message = ajouter_tache(
-            task.description,
-            task.periodicity,
-            task.estimated_minutes  
-        )
-        return {"message": message}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+#### Partie tasks
 @app.post("/chat")#à modifier pour plus tard
 async def chat_endpoint(request: Request):
     data = await request.json()
@@ -54,77 +38,64 @@ async def chat_endpoint(request: Request):
     except Exception as e:
         print("Erreur dans /chat:", e)
         return {"response": "Erreur côté serveur."}
-    
-@app.get("/tasks")
-def read_tasks():
-    #met à jour les périodiques
-    refresh_tasks()#en partant du princique que le back est tout le temps actif
-    now = datetime.now(timezone.utc)
+
+@app.get("/suggestions")
+def get_task_suggestions():
     with SessionLocal() as db:
         tasks = db.query(Task).all()
-        results = []
+        suggestions = []
+
         for task in tasks:
-            task.periodicity = int(task.periodicity)
-            next_due = get_next_due_date(task)#ajoute de la duré
-            temps_restant = None
-            missed_count = 0
-            missed_message = None
+            occurrences = task.occurrences
+            total = len(occurrences)
+            ratées = len([o for o in occurrences if not o.is_done])
 
-            if task.periodicity:
-                missed_count = compter_occurrences_ratees_par_tache(task.id)
-                if missed_count > 0:
-                    missed_message = f"Attention, tâche ratée {missed_count} fois"
-                    temps_restant = "Tâche suivante"
-                if task.status != "fait" and next_due:#ne sera pas le cas mais attendant
-                    delta = next_due - now
-                    temps_restant = afficher_temps_restant(delta)
+            if total >= 3 and ratées >= 2:
+                suggestions.append(f"- {task.description} ({ratées} fois ratée sur {total})")
 
-            else:
-                if task.status != "fait" and task.period_end:
-                    period_end = make_aware(task.period_end)
-                    if period_end > now:
-                        delta = period_end - now
-                        temps_restant = afficher_temps_restant(delta)
-                    else:
-                        missed_message = f"tâche ratée"
-                        temps_restant = None 
-        
-            # print(f"TÂCHE: {task.description}, périodique={task.periodicity}, statut={task.status}, période_end={task.period_end}, now={now}, next_due={next_due}, missed={missed_count}")
-            # print(f"Bool conversion:{task.periodicity} ET {int(task.periodicity) == 1 if task.periodicity is not None else False}")
-            results.append({
-                "id": task.id,
-                "description": task.description,
-                "status": task.status,
-                "periodicity": bool(task.periodicity),
-                "next_due_date": next_due.isoformat() if next_due else None,
-                "temps_restant": temps_restant,
-                "isDone": task.status in ["en_attente", "fait"],
-                "missed_message": missed_message,
-                "missed_count": missed_count,
-                "period_end": task.period_end
-            })
+        if not suggestions:
+            return {"suggestions": ["Aucune suggestion pour le moment."]}
 
-        return results
+        return {"suggestions": suggestions}
+
+@app.get("/deplacement")
+def obtenir_temps_deplacement(depart: str, arrivee: str):
+    with SessionLocal() as db:
+        trajet = db.query(TempsDeDeplacement).filter_by(
+            lieu_depart=depart.strip().lower(),
+            lieu_arrivee=arrivee.strip().lower()
+        ).first()
+
+        if trajet:
+            return {"temps": trajet.duree_minutes}
+        return {"message": f"Pas de temps enregistré entre {depart} et {arrivee}"}
     
+@app.post("/deplacement")
+def ajouter_ou_mettre_a_jour_deplacement(data: TempsDeplacementRequest):
+    with SessionLocal() as db:
+        # Vérifie si un temps existe déjà entre ces lieux
+        existing = db.query(TempsDeDeplacement).filter_by(
+            lieu_depart=data.lieu_depart.strip().lower(),
+            lieu_arrivee=data.lieu_arrivee.strip().lower()
+        ).first()
 
-@app.put("/tasks/{task_id}/done")
-async def update_task_done(task_id: int, payload: dict = Body(...)):
-    # Récupérer l'argument 'done' du payload
-    is_done = payload.get("done")
+        if existing:
+            existing.duree_minutes = data.duree_minutes
+            message = f"Temps de déplacement mis à jour : {data.duree_minutes} minutes entre {data.lieu_depart} et {data.lieu_arrivee}."
+        else:
+            nouveau = TempsDeDeplacement(
+                lieu_depart=data.lieu_depart.strip().lower(),
+                lieu_arrivee=data.lieu_arrivee.strip().lower(),
+                duree_minutes=data.duree_minutes
+            )
+            db.add(nouveau)
+            message = f"Nouveau temps de déplacement enregistré : {data.duree_minutes} minutes entre {data.lieu_depart} et {data.lieu_arrivee}."
+
+        db.commit()
+        return {"message": message}
     
-    # Vérifier si is_done est True ou False et appeler la fonction appropriée
-    if is_done is not None:  # Si 'done' existe dans le payload
-        return {"message": marquer_tache_faite(task_id, is_done)}
-    else:
-        return {"message": "Erreur: 'done' doit être spécifié dans le corps de la requête."}
-
-@app.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
-    return {"message": supprimer_tache_par_id(task_id)}
-
-@app.delete("/tasks/delete")
-async def delete_task_by_desc(request: Request):  # renommé pour éviter conflit
-    payload = await request.json()
-    desc = payload.get("description", "")
-    result = supprimer_tache(desc)
-    return {"message": result}
+async def test_message():
+    from .manage_db.manage_message import notify_info
+    print("📨 Appel de test-message")
+    await notify_info("Bot", "Test message WebSocket")
+    return {"status": "sent"}

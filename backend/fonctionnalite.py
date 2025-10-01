@@ -1,12 +1,9 @@
+#A voir si je ne vais pas changer le nom du module 
 from datetime import datetime, timezone, timedelta
-from .database import Task, SessionLocal, TaskOccurrence
-
-def make_aware(dt):
-    if dt is not None and dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)#évite les datetime naive(qui ne connaisse pas leur fuseau horaire)
-    return dt
+from .models import Task, SessionLocal, TaskOccurrence, make_aware
+from typing import Union
    
-def refresh_tasks():
+def refresh_tasks():# je dois voir si il faut mettre ou non dans manage_task
     with SessionLocal() as db:
         now = datetime.now(timezone.utc)
         # print(f"REFRESH: now={now}")
@@ -14,30 +11,30 @@ def refresh_tasks():
         all_tasks = db.query(Task).all()
         for task in all_tasks:
             task.periodicity = int(task.periodicity)
-            period_end = make_aware(task.period_end)
+            task_end = make_aware(task.task_end)
             #Et donc agit seulement si la date limite est dépassé
-            if now >= period_end:
+            if now >= task_end:
                 if task.periodicity:
                 # Enregistrer un nouveau occurrence
                     occurrence = TaskOccurrence(
                         task_id=task.id,
-                        period_start=task.period_start,
-                        period_end=task.period_end,
+                        task_start=task.task_start,
+                        task_end=task.task_end,
                         is_done=(task.status == "en_attente")
                     )
                     db.add(occurrence)
                     # Réinitialiser le Task
                     task.status = "a_faire"
                     task.done_at = None
-                    duration = task.period_end - task.period_start
-                    task.period_start = task.period_end
-                    task.period_end = task.period_end + duration
+                    duration = task.task_end - task.task_start
+                    task.task_start = task.task_end
+                    task.task_end = task.task_end + duration
                     print(f"{task.description} tache périodique passé {task.periodicity}")
 
                 else:
                     if task.status == "en_attente" :
                         task.status = "fait"
-                    print(f"{task.description} tache non périodique passé {task.periodicity}")
+                    # print(f"{task.description} tache non périodique passé {task.periodicity}")
 
             # print(f"[REFRESH] Tâche '{task.description}' prolongée jusqu'à {task.period_end}, périodie{task.periodicity}, statue {task.status}")
         db.commit()
@@ -47,17 +44,18 @@ def get_next_due_date(task: Task, now: datetime = None) -> datetime | None:
         return None
     now = now or datetime.now(timezone.utc)
     #pour être sûre
-    period_start = make_aware(task.period_start)
-    period_end = make_aware(task.period_end)
+    task_start = make_aware(task.task_start)
+    task_end = make_aware(task.task_end)
     #ajout de la duré si la date limite est dépassée
-    duration = period_end - period_start
-    while period_end < now:
-        period_end += duration
+    duration = task_end - task_start
+    while task_end < now:
+        task_end += duration
 
-    return period_end
+    return task_end
 
-def afficher_temps_restant(delta: timedelta) -> str:
-    total_seconds = int(delta.total_seconds())
+def afficher_temps_restant(total_seconds: Union[int, timedelta]) -> str:#pour plus de controle
+    if type(total_seconds) ==  timedelta:
+        total_seconds = int(total_seconds.total_seconds())
     if total_seconds <= 0:
         return "Échéance dépassée"
     minutes = (total_seconds // 60) % 60
@@ -78,3 +76,4 @@ def afficher_temps_restant(delta: timedelta) -> str:
         parts.append(f"{seconds} s")
 
     return "Temps restant : " + ", ".join(parts)
+

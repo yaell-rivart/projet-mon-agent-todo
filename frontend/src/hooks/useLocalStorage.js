@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-
+// stocker et retrouver certaines données dans le localStorage du navigateur
+// pour réglé le probleme de manque de persistantes lors des raffraichissements manuelles
 function useLocalStorage(key, initialValue) {
   const [storedValue, setStoredValue] = useState(() => {
     try {
