@@ -6,12 +6,6 @@ Un assistant IA personnel pour la gestion intelligente de tâches, avec interfac
 
 ---
 
-## Aperçu
-
-![todo-demo](https://via.placeholder.com/800x300.png?text=DEMO+à+ajouter+ici)
-
----
-
 ## Fonctionnalités
 
 - 💬 Interface de type **chat** pour ajouter, supprimer ou discuter avec l’IA.
